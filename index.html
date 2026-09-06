@@ -94,7 +94,7 @@ const mock=[
 ];
 
 function renderResults(q){
- let terms=localTerms(q);
+ let terms=localTerms(q);  
  resEl.innerHTML=`<section class="results"><div class="rhead"><strong>Demo results</strong><span>Live results appear after an authorised source is connected</span></div>
  ${mock.map((r,i)=>`<article class="result"><div class="rank">#${i+1}</div><div style="flex:1"><h3>${r.title}</h3><div class="meta">${r.court} · ${r.date} · ${r.citation}</div><div class="score">${r.relevance}% relevance</div><div class="headline">${r.headline}</div><div class="actions"><button onclick="openMock(${i})">Open judgment</button><a class="link" href="${ECOURTS}" target="_blank" rel="noopener">Search official eCourts ↗</a></div></div></article>`).join('')}
  ${terms.length?`<div class="card" style="margin-top:12px"><strong>Detected research signals</strong><div class="chips">${terms.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div></div>`:''}</section>`
