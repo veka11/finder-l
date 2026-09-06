@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17202a">
+<title>Judgment Finder</title>
+<style>
+:root{--ink:#17202a;--muted:#68727d;--line:#dfe4e8;--paper:#fff;--soft:#f5f6f7;--accent:#17202a}
+*{box-sizing:border-box}body{margin:0;background:#f1f3f5;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{max-width:1050px;margin:auto;padding:24px 18px 50px}.top{display:flex;justify-content:space-between;gap:15px;align-items:flex-start;margin-bottom:24px}
+.kicker{font-size:11px;letter-spacing:.12em;color:var(--muted);font-weight:700}.brand{font:700 32px Georgia,serif;margin:5px 0}.sub{color:var(--muted);font-size:14px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 3px 14px #00000008}
+textarea{width:100%;border:1px solid #cfd5da;border-radius:10px;padding:14px;font:16px/1.5 inherit;resize:vertical;outline:none}
+textarea:focus{border-color:#7d8790;box-shadow:0 0 0 3px #17202a12}
+button,.link{border:0;border-radius:9px;background:var(--accent);color:white;padding:12px 16px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+button.secondary,.copy{background:white;color:var(--ink);border:1px solid var(--line)}
+.searchbar{display:flex;gap:10px;margin-top:12px}.searchbar button{min-width:150px}
+.note{font-size:12px;color:var(--muted);margin-top:9px}
+h2{font:700 22px Georgia,serif;margin:0 0 5px}.section{margin-top:18px}
+.ec{margin-top:18px;background:white;border:1px solid var(--line);border-radius:14px;padding:18px}
+.ecHead{display:flex;justify-content:space-between;gap:15px}.variants{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:15px}
+.variant{border:1px solid var(--line);border-radius:10px;padding:12px;position:relative}.variant strong{display:block}.variant small{display:block;color:var(--muted);margin:3px 0 9px}.variant code{display:block;background:var(--soft);padding:9px;font-size:12px;line-height:1.4;min-height:55px;white-space:pre-wrap;padding-right:55px}.copy{position:absolute;right:9px;bottom:9px;padding:6px 8px;font-size:11px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.chip{background:var(--soft);border:1px solid var(--line);padding:7px 9px;border-radius:999px;font-size:12px}
+.empty{text-align:center;padding:55px 20px;color:var(--muted)}.icon{font:40px Georgia,serif;color:var(--ink)}
+.results{margin-top:18px}.rhead{display:flex;justify-content:space-between;color:var(--muted);font-size:13px;margin-bottom:9px}.result{background:white;border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:9px;display:flex;gap:13px}.rank{font-weight:800;color:#9aa2a9;width:30px}.result h3{margin:0 0 4px;font:700 18px Georgia,serif}.meta{font-size:12px;color:var(--muted)}.score{font-size:11px;margin-top:7px;font-weight:700}.headline{font-size:13px;line-height:1.5;margin:9px 0}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button,.actions a{font-size:12px;padding:8px 10px}.viewer{margin-top:18px}.viewer pre{white-space:pre-wrap;font:14px/1.65 Georgia,serif;background:white;border:1px solid var(--line);border-radius:12px;padding:18px;overflow:auto}.passage{background:#fff9dc;border-left:4px solid #bca94a;padding:11px;margin-top:9px;font:14px/1.55 Georgia,serif}.error{margin-top:12px;padding:12px;border-radius:9px;background:#fff0f0;color:#8a2c2c;font-size:13px}
+footer{display:flex;justify-content:space-between;margin-top:25px;color:#8b949c;font-size:11px}
+@media(max-width:720px){.wrap{padding:16px 12px 35px}.brand{font-size:27px}.searchbar{flex-direction:column}.searchbar button{width:100%}.ecHead{flex-direction:column}.variants{grid-template-columns:1fr}.result{padding:13px}.rank{width:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><div><div class="kicker">LEGAL RESEARCH · V1</div><div class="brand">Judgment Finder</div><div class="sub">Find Indian judgments quickly. Analyse later.</div></div></header>
+
+<section class="card">
+<textarea id="q" rows="4" placeholder="Example: Supreme Court cases where an FIR was quashed because the dispute was essentially commercial or civil"></textarea>
+<div class="searchbar"><button id="find">Find Judgments</button></div>
+<div class="note">Tip: describe the facts or legal issue, not just the section number.</div>
+</section>
+
+<div id="error"></div>
+<div id="ec"></div>
+<div id="results"></div>
+<div id="viewer"></div>
+
+<footer><span>Judgment Finder V1</span><span>Discovery tool — not legal advice</span></footer>
+</div>
+
+<script>
+const ECOURTS="https://judgments.ecourts.gov.in/pdfsearch/index.php";
+const qEl=document.getElementById('q'), ecEl=document.getElementById('ec'), resEl=document.getElementById('results'), viewEl=document.getElementById('viewer'), errEl=document.getElementById('error');
+
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function unique(a){return [...new Set(a.filter(Boolean).map(x=>x.trim()))]}
+
+function expand(q){
+ let base=q.replace(/\s+/g,' ').trim();
+ let words=(base.match(/[A-Za-z0-9]+/g)||[]).filter(x=>x.length>2);
+ let any=words.slice(0,12).join(' ');
+ let all=words.slice(0,8).join(' ');
+ let related=[];
+ const pairs=[
+ [/delay in FIR/ig,'delay in lodging FIR'],[/delay FIR/ig,'belated FIR'],
+ [/quashing/ig,'quash'],[/quashed/ig,'quash'],
+ [/criminal proceedings/ig,'criminal prosecution'],
+ [/contractual dispute/ig,'commercial dispute']
+ ];
+ pairs.forEach(([r,to])=>{if(r.test(base)) related.push(base.replace(r,to))});
+ return {phrase:base,any_words:any,all_words:all,related:unique(related).slice(0,5)}
+}
+
+function renderEC(x){
+ ecEl.innerHTML=`<section class="ec"><div class="ecHead"><div><div class="kicker">OFFICIAL SOURCE</div><h2>Search eCourts</h2><div class="sub">Ready-made searches for the official portal. Complete its CAPTCHA normally.</div></div><a class="link" href="${ECOURTS}" target="_blank" rel="noopener">Open eCourts ↗</a></div>
+ <div class="variants">${[['Phrase(s)','Best when wording matters',x.phrase],['Any Words','Broader discovery',x.any_words],['All Words','Narrower search',x.all_words]].map(v=>`<div class="variant"><strong>${v[0]}</strong><small>${v[1]}</small><code>${esc(v[2])}</code><button class="copy secondary" data-copy="${esc(v[2])}">Copy</button></div>`).join('')}</div>
+ ${x.related.length?`<div class="section"><strong>Alternative formulations</strong><div class="chips">${x.related.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div></div>`:''}</section>`;
+ document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=async()=>{await navigator.clipboard.writeText(b.dataset.copy);let old=b.textContent;b.textContent='Copied';setTimeout(()=>b.textContent=old,900)})
+}
+
+function localTerms(q){
+ const t=q.toLowerCase();
+ const terms=[
+ ['fir','FIR / First Information Report'],['quash','quashing / inherent powers'],
+ ['498a','Section 498A'],['bail','bail'],['arbitration','arbitration'],
+ ['contract','contract / commercial dispute'],['cheque','cheque dishonour'],
+ ['writ','writ jurisdiction'],['limitation','limitation'],['delay','delay / laches']
+ ];
+ return terms.filter(x=>t.includes(x[0])).map(x=>x[1])
+}
+
+const mock=[
+ {title:'Illustrative Supreme Court judgment — FIR / commercial dispute',court:'Supreme Court of India',date:'2024',citation:'Illustrative V1 result',relevance:94,text:'This is a demonstration result. Connect an authorised Indian Kanoon API to retrieve live judgments. The production viewer will display the judgment text and relevant fragments returned by the source.',headline:'Illustrative result showing where a relevant passage will appear.'},
+ {title:'Illustrative High Court judgment — quashing criminal proceedings',court:'High Court',date:'2023',citation:'Illustrative V1 result',relevance:86,text:'This is a demonstration result. The final application will retrieve live documents from an authorised source.',headline:'Illustrative result for testing the search interface.'},
+ {title:'Illustrative judgment — civil nature of dispute',court:'High Court',date:'2022',citation:'Illustrative V1 result',relevance:79,text:'This is a demonstration result. No legal proposition should be relied upon from this placeholder text.',headline:'Illustrative result for testing ranked discovery.'}
+];
+
+function renderResults(q){
+ let terms=localTerms(q);
+ resEl.innerHTML=`<section class="results"><div class="rhead"><strong>Demo results</strong><span>Live results appear after an authorised source is connected</span></div>
+ ${mock.map((r,i)=>`<article class="result"><div class="rank">#${i+1}</div><div style="flex:1"><h3>${r.title}</h3><div class="meta">${r.court} · ${r.date} · ${r.citation}</div><div class="score">${r.relevance}% relevance</div><div class="headline">${r.headline}</div><div class="actions"><button onclick="openMock(${i})">Open judgment</button><a class="link" href="${ECOURTS}" target="_blank" rel="noopener">Search official eCourts ↗</a></div></div></article>`).join('')}
+ ${terms.length?`<div class="card" style="margin-top:12px"><strong>Detected research signals</strong><div class="chips">${terms.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div></div>`:''}</section>`
+}
+window.openMock=function(i){
+ let r=mock[i];
+ viewEl.innerHTML=`<section class="viewer"><div class="card"><div class="kicker">JUDGMENT VIEWER · DEMO</div><h2>${esc(r.title)}</h2><div class="meta">${esc(r.court)} · ${esc(r.date)} · ${esc(r.citation)}</div><div class="passage"><strong>Relevant passage area</strong><br>${esc(r.headline)}</div><pre>${esc(r.text)}</pre></div></section>`
+ viewEl.scrollIntoView({behavior:'smooth',block:'start'})
+}
+
+document.getElementById('find').onclick=()=>{
+ const q=qEl.value.trim();
+ if(q.length<3){errEl.innerHTML='<div class="error">Please enter a research question.</div>';return}
+ errEl.innerHTML='';viewEl.innerHTML='';
+ renderEC(expand(q));renderResults(q);
+}
+qEl.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter')document.getElementById('find').click()})
+</script>
+</body>
+</html>
